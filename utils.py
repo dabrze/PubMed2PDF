@@ -32,8 +32,6 @@ def savePdfFromUrl(pdfUrl, output_dir, name, headers):
             t = requests.get(pdfUrl, headers=headers, allow_redirects=True)
             if t.content is None or t.content.lower().startswith(b'<!doctype html>'):
                 return False
-    else:
-        return False
 
     with open('{0}/{1}.pdf'.format(output_dir, name), 'wb') as f:
         f.write(t.content)
