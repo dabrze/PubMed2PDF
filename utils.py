@@ -34,27 +34,28 @@ def savePdfFromUrl(pdfUrl, output_dir, name, headers):
                 return False
 
     with open('{0}/{1}.pdf'.format(output_dir, name), 'wb') as f:
-        f.write(t.content)
+        for block in t.iter_content(2048):
+            f.write(block)
 
     return True
 
 
-def fetch(pmid, finders, name, headers, errorPmids, output_dir):
+def fetch(pmid, finders, name, headers, failed_pubmeds, output_dir):
     uri = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=pubmed&id={0}&retmode=ref&cmd=prlinks".format(
         pmid
     )
     success = False
     dontTry = False
     if os.path.exists("{0}/{1}.pdf".format(output_dir, pmid)):  # bypass finders if pdf reprint already stored locally
-        logger.debug("** Reprint #{0} already downloaded and in folder; skipping.".format(pmid))
+        logger.info("** Reprint #{0} already downloaded and in folder; skipping.".format(pmid))
         return
     else:
         # first, download the html from the page that is on the other side of the pubmed API
         req = requests.get(uri, headers=headers)
         if 'ovid' in req.url:
-            logger.debug(
+            logger.info(
                 " ** Reprint {0} cannot be fetched as ovid is not supported by the requests package.".format(pmid))
-            errorPmids.write("{}\t{}\n".format(pmid, name))
+            failed_pubmeds.append(pmid)
             dontTry = True
             success = True
         soup = BeautifulSoup(req.content, 'lxml')
@@ -66,13 +67,13 @@ def fetch(pmid, finders, name, headers, errorPmids, output_dir):
                 pdfUrl = eval(finder)(req, soup, headers)
                 if type(pdfUrl) != type(None):
                     success = savePdfFromUrl(pdfUrl, output_dir, name, headers)
-                    logger.debug("** fetching of reprint {0} succeeded".format(pmid))
+                    logger.info("** fetching of reprint {0} succeeded".format(pmid))
                     if success:
                         break
 
         if not success:
-            logger.debug("** Reprint {0} could not be fetched with the current finders.".format(pmid))
-            errorPmids.write("{}\t{}\n".format(pmid, name))
+            logger.info("** Reprint {0} could not be fetched with the current finders.".format(pmid))
+            failed_pubmeds.append(pmid)
 
 
 def acsPublications(req, soup, headers):
@@ -92,7 +93,7 @@ def acsPublications(req, soup, headers):
     return None
 
 
-def direct_pdf_link(req):
+def direct_pdf_link(req, soup, headers):
     if req.content[-4:] == '.pdf':
         logger.debug("** fetching reprint using the 'direct pdf link' finder...")
         pdfUrl = req.content
@@ -161,18 +162,27 @@ def pubmed_central_v2(req, soup, headers):
 
 
 def science_direct(req, soup, headers):
-    newUri = urllib.parse.unquote(soup.find_all('input')[0].get('value'))
-    req = requests.get(newUri, allow_redirects=True, headers=headers)
-    soup = BeautifulSoup(req.content, 'lxml')
+    success = False
 
-    possibleLinks = soup.find_all('meta', attrs={'name': 'citation_pdf_url'})
+    for input in soup.find_all('input'):
+        newUri = urllib.parse.unquote(input.get('value'))
+        if "http" in newUri:
+            success = True
+            break
 
-    if len(possibleLinks) > 0:
-        logger.debug("** fetching reprint using the 'science_direct' finder...")
-        req = requests.get(possibleLinks[0].get('content'), headers=headers)
+    if success:
+        req = requests.get(newUri, allow_redirects=True, headers=headers)
         soup = BeautifulSoup(req.content, 'lxml')
-        pdfUrl = soup.find_all('a')[0].get('href')
-        return pdfUrl
+
+        possibleLinks = soup.find_all('meta', attrs={'name': 'citation_pdf_url'})
+
+        if len(possibleLinks) > 0:
+            logger.debug("** fetching reprint using the 'science_direct' finder...")
+            req = requests.get(possibleLinks[0].get('content'), headers=headers)
+            soup = BeautifulSoup(req.content, 'lxml')
+            pdfUrl = soup.find_all('a')[0].get('href')
+            return pdfUrl
+
     return None
 
 

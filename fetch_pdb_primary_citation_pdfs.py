@@ -4,6 +4,7 @@ from utils import *
 import os
 import requests
 import pandas as pd
+from joblib import Parallel, delayed
 
 RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
 PDFS_DIR = os.path.join(RESULTS_DIR, "pdfs")
@@ -42,6 +43,8 @@ def download_pmids_from_pdbj(min_date=None, max_date=None, filename="pmids", use
 
         if min_date is not None:
             query += " deposition_date >= '{0}'".format(min_date)
+        if min_date is not None and max_date is not None:
+            query += " AND".format(min_date)
         if max_date is not None:
             query += " deposition_date <= '{0}'".format(max_date)
 
@@ -51,12 +54,43 @@ def download_pmids_from_pdbj(min_date=None, max_date=None, filename="pmids", use
     return pmids_file
 
 
+def fetch_pubmed_pdf(finders, headers, max_tries, output_directory, pmid):
+    failed_pubmeds = []
+    logging.info("Trying to fetch pmid {0}".format(pmid))
+    retriesSoFar = 0
+
+    while retriesSoFar < max_tries:
+        try:
+            soup = fetch(pmid, finders, pmid, headers, failed_pubmeds, output_directory)
+            retriesSoFar = max_tries
+        except requests.ConnectionError as e:
+            if '104' in str(e) or 'BadStatusLine' in str(e):
+                retriesSoFar += 1
+                if retriesSoFar < max_tries:
+                    logging.debug("** fetching of reprint {0} failed from error {1}, retrying".format(pmid, e))
+                else:
+                    logging.debug("** fetching of reprint {0} failed from error {1}".format(pmid, e))
+                    failed_pubmeds.append(pmid)
+            else:
+                logging.debug("** fetching of reprint {0} failed from error {1}".format(pmid, e))
+                retriesSoFar = max_tries
+                failed_pubmeds.append(pmid)
+        except Exception as e:
+            logging.info("** fetching of reprint {0} failed from error {1}".format(pmid, e))
+            import sys, traceback
+            traceback.print_exc(file=sys.stdout)
+            retriesSoFar = max_tries
+            failed_pubmeds.append(pmid)
+
+        return failed_pubmeds
+
+
 def pdf(pmids_csv_file, output_directory=PDFS_DIR, errors_file=ERRORS_FILE, max_tries=3, verbose=False):
     if verbose:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
         logging.debug('Full log mode activated')
     else:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
     if not os.path.exists(output_directory):
         logging.info(f"Output directory of {output_directory} did not exist.  Created the directory.")
@@ -79,36 +113,18 @@ def pdf(pmids_csv_file, output_directory=PDFS_DIR, errors_file=ERRORS_FILE, max_
                             'AppleWebKit/537.36 (KHTML, like Gecko) ' \
                             'Chrome/56.0.2924.87 ' \
                             'Safari/537.36'
-    failed_pubmeds = []
 
     # Fetching pubmeds from different sources and exporting
     pmid_df = pd.read_csv(pmids_csv_file, keep_default_na=False, na_values=["", '""'], dtype='Int64')
     pmid_df = pmid_df.dropna()
     pmids = pmid_df.pmid.to_list()
 
+    failed_pubmeds = []
     for pmid in pmids:
-        logging.info("Trying to fetch pmid {0}".format(pmid))
-        retriesSoFar = 0
-        while retriesSoFar < max_tries:
-            try:
-                soup = fetch(pmid, finders, pmid, headers, failed_pubmeds, output_directory)
-                retriesSoFar = max_tries
-            except requests.ConnectionError as e:
-                if '104' in str(e) or 'BadStatusLine' in str(e):
-                    retriesSoFar += 1
-                    if retriesSoFar < max_tries:
-                        logging.debug("** fetching of reprint {0} failed from error {1}, retrying".format(pmid, e))
-                    else:
-                        logging.debug("** fetching of reprint {0} failed from error {1}".format(pmid, e))
-                        failed_pubmeds.append(pmid)
-                else:
-                    logging.debug("** fetching of reprint {0} failed from error {1}".format(pmid, e))
-                    retriesSoFar = max_tries
-                    failed_pubmeds.append(pmid)
-            except Exception as e:
-                logging.debug("** fetching of reprint {0} failed from error {1}".format(pmid, e))
-                retriesSoFar = max_tries
-                failed_pubmeds.append(pmid)
+        f = fetch_pubmed_pdf(finders, headers, max_tries, output_directory, pmid)
+        failed_pubmeds.append(f)
+
+    failed_pubmeds = [item for sublist in failed_pubmeds for item in sublist]
 
     with open(errors_file, 'w+') as error_file:
         for pubmed_id in failed_pubmeds:
@@ -116,5 +132,5 @@ def pdf(pmids_csv_file, output_directory=PDFS_DIR, errors_file=ERRORS_FILE, max_
 
 
 if __name__ == '__main__':
-    pmids_file = download_pmids_from_pdbj(min_date="2020-01-01")
-    pdf(pmids_file, verbose=True)
+    pmids_file = download_pmids_from_pdbj() # min_date="2000-01-01", max_date="2010-12-31"
+    pdf(pmids_file, verbose=False)
