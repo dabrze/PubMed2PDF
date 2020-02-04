@@ -7,8 +7,8 @@ import logging
 import click
 
 logger = logging.getLogger(__name__)
-from .constants import DEFAULT_ERROR_FILE, DATA_DIR
-from .utils import *
+from constants import DEFAULT_ERROR_FILE, DATA_DIR
+from utils import *
 
 
 @click.group(help='pubmed2pdf')

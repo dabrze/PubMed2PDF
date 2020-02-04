@@ -16,11 +16,29 @@ logger = logging.getLogger(__name__)
 def getMainUrl(url):
     return "/".join(url.split("/")[:3])
 
+JAVASCRIPT_REDIRECT = re.compile('window.location.href[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"')
+
 
 def savePdfFromUrl(pdfUrl, output_dir, name, headers):
     t = requests.get(pdfUrl, headers=headers, allow_redirects=True)
+
+    if t.content.lower().startswith(b'<!doctype html>'):
+        urls = JAVASCRIPT_REDIRECT.findall(t.content.decode('utf-8'))
+
+        if urls:
+            pdfUrl = urls[0].split('"')[1]
+            pdfUrl = pdfUrl.replace("/epdf/", "/pdfdirect/")
+
+            t = requests.get(pdfUrl, headers=headers, allow_redirects=True)
+            if t.content is None or t.content.lower().startswith(b'<!doctype html>'):
+                return False
+    else:
+        return False
+
     with open('{0}/{1}.pdf'.format(output_dir, name), 'wb') as f:
         f.write(t.content)
+
+    return True
 
 
 def fetch(pmid, finders, name, headers, errorPmids, output_dir):
@@ -49,10 +67,10 @@ def fetch(pmid, finders, name, headers, errorPmids, output_dir):
                 logger.debug("Trying {0}".format(finder))
                 pdfUrl = eval(finder)(req, soup, headers)
                 if type(pdfUrl) != type(None):
-                    savePdfFromUrl(pdfUrl, output_dir, name, headers)
-                    success = True
+                    success = savePdfFromUrl(pdfUrl, output_dir, name, headers)
                     logger.debug("** fetching of reprint {0} succeeded".format(pmid))
-                    break
+                    if success:
+                        break
 
         if not success:
             logger.debug("** Reprint {0} could not be fetched with the current finders.".format(pmid))
