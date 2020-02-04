@@ -16,21 +16,43 @@ logger = logging.getLogger(__name__)
 def getMainUrl(url):
     return "/".join(url.split("/")[:3])
 
+HTML_OR_XML = re.compile('^(\s*<[!]doctype|\s*<[?]xml)', re.IGNORECASE)
 JAVASCRIPT_REDIRECT = re.compile('window.location.href[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"')
+PDF_LINK = re.compile('(type[ =]+"application/pdf"[ ]+href[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"|name[ =]+"citation_pdf_url"[ ]+content[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+")')
 
+def savePdfFromUrl(pdf_url, output_dir, name, headers):
+    t = requests.get(pdf_url, headers=headers, allow_redirects=True)
 
-def savePdfFromUrl(pdfUrl, output_dir, name, headers):
-    t = requests.get(pdfUrl, headers=headers, allow_redirects=True)
+    if not t.content.lower().startswith(b'%PDF'):
+        decoded_content = t.content.decode('utf-8')
 
-    if t.content.lower().startswith(b'<!doctype html>'):
-        urls = JAVASCRIPT_REDIRECT.findall(t.content.decode('utf-8'))
+        if HTML_OR_XML.match(decoded_content):
+            urls = JAVASCRIPT_REDIRECT.findall(decoded_content)
+            pdfs = PDF_LINK.findall(decoded_content)
 
-        if urls:
-            pdfUrl = urls[0].split('"')[1]
-            pdfUrl = pdfUrl.replace("/epdf/", "/pdfdirect/")
+            if urls:
+                pdf_url = urls[0].split('"')[1]
+                pdf_url = pdf_url.replace("/epdf/", "/pdfdirect/")
 
-            t = requests.get(pdfUrl, headers=headers, allow_redirects=True)
-            if t.content is None or t.content.lower().startswith(b'<!doctype html>'):
+                t = requests.get(pdf_url, headers=headers, allow_redirects=True)
+                decoded_content = t.content.decode('utf-8')
+                if HTML_OR_XML.match(decoded_content):
+                    return False
+            elif pdfs:
+                potential_url = pdfs[0].split('"')[3]
+
+                if not "http" in potential_url:
+                    fragments = pdf_url.split('/')
+                    server_url = fragments[0] + "//" + fragments[2]
+                    pdf_url = server_url + pdfs[0].split('"')[3]
+                else:
+                    pdf_url = potential_url
+
+                t = requests.get(pdf_url, headers=headers, allow_redirects=True)
+                decoded_content = t.content.decode('utf-8')
+                if HTML_OR_XML.match(decoded_content):
+                    return False
+            else:
                 return False
 
     with open('{0}/{1}.pdf'.format(output_dir, name), 'wb') as f:
@@ -67,8 +89,8 @@ def fetch(pmid, finders, name, headers, failed_pubmeds, output_dir):
                 pdfUrl = eval(finder)(req, soup, headers)
                 if type(pdfUrl) != type(None):
                     success = savePdfFromUrl(pdfUrl, output_dir, name, headers)
-                    logger.info("** fetching of reprint {0} succeeded".format(pmid))
                     if success:
+                        logger.info("** fetching of reprint {0} succeeded".format(pmid))
                         break
 
         if not success:
@@ -155,7 +177,10 @@ def pubmed_central_v2(req, soup, headers):
 
     if len(possibleLinks) > 0:
         logger.debug("** fetching reprint using the 'pubmed central' finder...")
-        pdfUrl = "https://www.ncbi.nlm.nih.gov/{}".format(possibleLinks[0].get('href'))
+        if "www.ncbi.nlm.nih.gov" in possibleLinks[0].get('href'):
+            pdfUrl = possibleLinks[0].get('href')
+        else:
+            pdfUrl = "https://www.ncbi.nlm.nih.gov/{}".format(possibleLinks[0].get('href'))
         return pdfUrl
 
     return None
@@ -165,10 +190,11 @@ def science_direct(req, soup, headers):
     success = False
 
     for input in soup.find_all('input'):
-        newUri = urllib.parse.unquote(input.get('value'))
-        if "http" in newUri:
-            success = True
-            break
+        if input.get('value'):
+            newUri = urllib.parse.unquote(input.get('value'))
+            if "http" in newUri:
+                success = True
+                break
 
     if success:
         req = requests.get(newUri, allow_redirects=True, headers=headers)

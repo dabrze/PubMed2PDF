@@ -56,7 +56,7 @@ def download_pmids_from_pdbj(min_date=None, max_date=None, filename="pmids", use
 
 def fetch_pubmed_pdf(finders, headers, max_tries, output_directory, pmid):
     failed_pubmeds = []
-    logging.info("Trying to fetch pmid {0}".format(pmid))
+    logging.debug("Trying to fetch pmid {0}".format(pmid))
     retriesSoFar = 0
 
     while retriesSoFar < max_tries:
