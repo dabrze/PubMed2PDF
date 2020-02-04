@@ -119,10 +119,12 @@ def pdf(pmids_csv_file, output_directory=PDFS_DIR, errors_file=ERRORS_FILE, max_
     pmid_df = pmid_df.dropna()
     pmids = pmid_df.pmid.to_list()
 
-    failed_pubmeds = []
-    for pmid in pmids:
-        f = fetch_pubmed_pdf(finders, headers, max_tries, output_directory, pmid)
-        failed_pubmeds.append(f)
+    failed_pubmeds = Parallel(n_jobs=-1, backend="loky")(delayed(fetch_pubmed_pdf)(finders, headers, max_tries, output_directory, pmid) for pmid in pmids)
+
+    # failed_pubmeds = []
+    # for pmid in pmids:
+    #     f = fetch_pubmed_pdf(finders, headers, max_tries, output_directory, pmid)
+    #     failed_pubmeds.append(f)
 
     failed_pubmeds = [item for sublist in failed_pubmeds for item in sublist]
 
