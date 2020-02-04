@@ -20,10 +20,15 @@ HTML_OR_XML = re.compile('^(\s*<[!]doctype|\s*<[?]xml)', re.IGNORECASE)
 JAVASCRIPT_REDIRECT = re.compile('window.location.href[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"')
 PDF_LINK = re.compile('(type[ =]+"application/pdf"[ ]+href[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"|name[ =]+"citation_pdf_url"[ ]+content[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+")')
 
+def is_pdf_content(content):
+    return content.lower().startswith(b'%pdf')
+
 def savePdfFromUrl(pdf_url, output_dir, name, headers):
+    pdf_url = pdf_url.replace("onlinelibrary.wiley.com/doi/pdf/", "onlinelibrary.wiley.com/doi/pdfdirect/")
+
     t = requests.get(pdf_url, headers=headers, allow_redirects=True)
 
-    if not t.content.lower().startswith(b'%PDF'):
+    if not is_pdf_content(t.content):
         decoded_content = t.content.decode('utf-8')
 
         if HTML_OR_XML.match(decoded_content):
@@ -32,11 +37,11 @@ def savePdfFromUrl(pdf_url, output_dir, name, headers):
 
             if urls:
                 pdf_url = urls[0].split('"')[1]
-                pdf_url = pdf_url.replace("/epdf/", "/pdfdirect/")
+                pdf_url = pdf_url.replace("doi/epdf/", "doi/pdfdirect/")
+                pdf_url = pdf_url.replace("doi/pdf/", "doi/pdfdirect/")
 
                 t = requests.get(pdf_url, headers=headers, allow_redirects=True)
-                decoded_content = t.content.decode('utf-8')
-                if HTML_OR_XML.match(decoded_content):
+                if not is_pdf_content(t.content):
                     return False
             elif pdfs:
                 potential_url = pdfs[0].split('"')[3]
@@ -49,9 +54,13 @@ def savePdfFromUrl(pdf_url, output_dir, name, headers):
                     pdf_url = potential_url
 
                 t = requests.get(pdf_url, headers=headers, allow_redirects=True)
-                decoded_content = t.content.decode('utf-8')
-                if HTML_OR_XML.match(decoded_content):
-                    return False
+                if not is_pdf_content(t.content):
+                    pdf_url = pdf_url.replace("doi/epdf/", "doi/pdfdirect/")
+                    pdf_url = pdf_url.replace("doi/pdf/", "doi/pdfdirect/")
+
+                    t = requests.get(pdf_url, headers=headers, allow_redirects=True)
+                    if not is_pdf_content(t.content):
+                        return False
             else:
                 return False
 
