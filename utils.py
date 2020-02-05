@@ -103,6 +103,13 @@ def fetch(pmid, finders, name, headers, failed_pubmeds, output_dir):
                         break
 
         if not success:
+            #hail mary
+            pdfUrl = "https://www.ncbi.nlm.nih.gov/pmc/articles/pmid/{0}/".format(pmid)
+            success = savePdfFromUrl(pdfUrl, output_dir, name, headers)
+            if success:
+                logger.info("** fetching of reprint {0} succeeded".format(pmid))
+
+        if not success:
             logger.info("** Reprint {0} could not be fetched with the current finders.".format(pmid))
             failed_pubmeds.append(pmid)
 
@@ -193,7 +200,6 @@ def pubmed_central_v2(req, soup, headers):
         return pdfUrl
 
     return None
-
 
 def science_direct(req, soup, headers):
     success = False

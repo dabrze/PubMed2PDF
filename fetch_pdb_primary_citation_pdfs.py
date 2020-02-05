@@ -2,6 +2,7 @@ import logging
 from utils import *
 
 import os
+import sys
 import requests
 import pandas as pd
 from joblib import Parallel, delayed
@@ -39,7 +40,7 @@ def download_pmids_from_pdbj(min_date=None, max_date=None, filename="pmids", use
                 WHERE b."pdbx_database_id_PubMed" IS NOT NULL AND b."pdbx_database_id_PubMed" <> -1
             ) as t 
             GROUP BY pmid, t.year
-            ORDER BY min(deposition_date)
+            ORDER BY min(deposition_date) DESC
         """
 
     if min_date is not None or max_date is not None:
@@ -131,12 +132,12 @@ def pdf(pmids_csv_file, output_directory=PDFS_DIR, errors_file=ERRORS_FILE, max_
     pmid_df = read_pmid_csv(pmids_csv_file)
     pmids = pmid_df.loc[:, "PubMed id"].to_list()
 
-    failed_pubmeds = Parallel(n_jobs=-1, backend="loky")(delayed(fetch_pubmed_pdf)(finders, headers, max_tries, output_directory, pmid) for pmid in pmids)
+    # failed_pubmeds = Parallel(n_jobs=-1, backend="loky")(delayed(fetch_pubmed_pdf)(finders, headers, max_tries, output_directory, pmid) for pmid in pmids)
 
-    # failed_pubmeds = []
-    # for pmid in pmids:
-    #     f = fetch_pubmed_pdf(finders, headers, max_tries, output_directory, pmid)
-    #     failed_pubmeds.append(f)
+    failed_pubmeds = []
+    for pmid in pmids:
+        f = fetch_pubmed_pdf(finders, headers, max_tries, output_directory, pmid)
+        failed_pubmeds.append(f)
 
     failed_pubmeds = [item for sublist in failed_pubmeds for item in sublist]
 
