@@ -28,14 +28,18 @@ def query_pdbj(sql, format, dest_file):
         for block in response.iter_content(2048):
             handle.write(block)
 
+
 def download_pmids_from_pdbj(min_date=None, max_date=None, filename="pmids", use_cache=False):
     pmids_file = os.path.join(RESULTS_DIR, filename + ".csv")
     query = """
-            SELECT distinct t.pmid 
+            SELECT pmid as "PubMed id", count(pdb_id) as "Number of deposits", min(deposition_date) as "Deposition date", t.year as "Publication year", array_agg(pdb_id) as "PDB ids"
             FROM (
-                SELECT a.pdbid as pdb_id, a.deposition_date as deposition_date, b."pdbx_database_id_PubMed" as pmid 
+                SELECT a.pdbid as pdb_id, a.deposition_date as deposition_date, b."pdbx_database_id_PubMed" as pmid, b.year 
                 FROM pdbj.brief_summary a left join pdbj.citation b on b.pdbid = a.pdbid
+                WHERE b."pdbx_database_id_PubMed" IS NOT NULL AND b."pdbx_database_id_PubMed" <> -1
             ) as t 
+            GROUP BY pmid, t.year
+            ORDER BY min(deposition_date)
         """
 
     if min_date is not None or max_date is not None:
@@ -53,6 +57,15 @@ def download_pmids_from_pdbj(min_date=None, max_date=None, filename="pmids", use
 
     return pmids_file
 
+
+def read_pmid_csv(csv_filename):
+    df = pd.read_csv(csv_filename, keep_default_na=False, na_values=["", '""'],
+                     dtype={"PubMed id": 'UInt64',
+                            "Number of deposits": 'UInt64',
+                            "Deposition date": 'object',
+                            "Publication year": 'UInt64',
+                            "PDB ids": 'object'})
+    return df
 
 def fetch_pubmed_pdf(finders, headers, max_tries, output_directory, pmid):
     failed_pubmeds = []
@@ -115,9 +128,8 @@ def pdf(pmids_csv_file, output_directory=PDFS_DIR, errors_file=ERRORS_FILE, max_
                             'Safari/537.36'
 
     # Fetching pubmeds from different sources and exporting
-    pmid_df = pd.read_csv(pmids_csv_file, keep_default_na=False, na_values=["", '""'], dtype='Int64')
-    pmid_df = pmid_df.dropna()
-    pmids = pmid_df.pmid.to_list()
+    pmid_df = read_pmid_csv(pmids_csv_file)
+    pmids = pmid_df.loc[:, "PubMed id"].to_list()
 
     failed_pubmeds = Parallel(n_jobs=-1, backend="loky")(delayed(fetch_pubmed_pdf)(finders, headers, max_tries, output_directory, pmid) for pmid in pmids)
 
