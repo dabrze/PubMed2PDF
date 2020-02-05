@@ -7,7 +7,7 @@ import requests
 import pandas as pd
 from joblib import Parallel, delayed
 
-RESULTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
+RESULTS_DIR = "/med/pdbrepo/pdb_pubmed_pdfs"
 PDFS_DIR = os.path.join(RESULTS_DIR, "pdfs")
 ERRORS_FILE = os.path.join(RESULTS_DIR, "failed_pubmeds.csv")
 
