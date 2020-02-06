@@ -19,21 +19,27 @@ def getMainUrl(url):
 HTML_OR_XML = re.compile('^(\s*<[!]doctype|\s*<[?]xml)', re.IGNORECASE)
 JAVASCRIPT_REDIRECT = re.compile('window.location.href[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"')
 PDF_LINK = re.compile('(type[ =]+"application/pdf"[ ]+href[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"|name[ =]+"citation_pdf_url"[ ]+content[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+")')
+CUSTOM_LINK = re.compile('(href="https://elifesciences.org/download/[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+[.]pdf[?][a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"|content[ =]+"[a-zA-Z0-9$-_@.&+!*\(\), /?:%]+"[ ]+name[ =]+"citation_pdf_url")')
 
 def is_pdf_content(content):
     return content.lower().startswith(b'%pdf')
 
 def savePdfFromUrl(pdf_url, output_dir, name, headers):
+    if pdf_url.startswith("//"):
+        pdf_url = "https:" + pdf_url
     pdf_url = pdf_url.replace("onlinelibrary.wiley.com/doi/pdf/", "onlinelibrary.wiley.com/doi/pdfdirect/")
 
     t = requests.get(pdf_url, headers=headers, allow_redirects=True)
 
-    if not is_pdf_content(t.content):
+    if t.status_code == 404 or t.status_code == 403:
+        return False
+    elif not is_pdf_content(t.content):
         decoded_content = t.content.decode('utf-8')
 
         if HTML_OR_XML.match(decoded_content):
             urls = JAVASCRIPT_REDIRECT.findall(decoded_content)
             pdfs = PDF_LINK.findall(decoded_content)
+            custom = CUSTOM_LINK.findall(decoded_content)
 
             if urls:
                 pdf_url = urls[0].split('"')[1]
@@ -61,6 +67,12 @@ def savePdfFromUrl(pdf_url, output_dir, name, headers):
                     t = requests.get(pdf_url, headers=headers, allow_redirects=True)
                     if not is_pdf_content(t.content):
                         return False
+            elif custom:
+                pdf_url = custom[0].split('"')[1]
+
+                t = requests.get(pdf_url, headers=headers, allow_redirects=True)
+                if not is_pdf_content(t.content):
+                    return False
             else:
                 return False
 
@@ -90,7 +102,7 @@ def fetch(pmid, finders, name, headers, failed_pubmeds, output_dir):
             dontTry = True
             success = True
         soup = BeautifulSoup(req.content, 'lxml')
-        #         return soup
+
         # loop through all finders until it finds one that return the pdf reprint
         if not dontTry:
             for finder in finders:
@@ -227,6 +239,26 @@ def science_direct(req, soup, headers):
     return None
 
 
+def cellPress(req, soup, headers):
+    possibleLinks = soup.find_all('a', attrs={'href': re.compile("https://linkinghub[.]elsevier[.]com/")})
+
+    if len(possibleLinks) > 0:
+        logger.debug("** fetching reprint using the 'cellPress' finder...")
+        pdfUrl = possibleLinks[0].get('href')
+        return pdfUrl
+    return None
+
+
+def eLife(req, soup, headers):
+    possibleLinks = soup.find_all('a', attrs={'href': re.compile("/eLife[.]")})
+
+    if len(possibleLinks) > 0:
+        logger.debug("** fetching reprint using the 'eLife' finder...")
+        pdfUrl = possibleLinks[0].get('href')
+        return pdfUrl
+    return None
+
+
 def uchicagoPress(req, soup, headers):
     possibleLinks = [
         x
@@ -238,4 +270,13 @@ def uchicagoPress(req, soup, headers):
         pdfUrl = getMainUrl(req.url) + possibleLinks[0].get('href')
         return pdfUrl
 
+    return None
+
+def doiLink(req, soup, headers):
+    possibleLinks = soup.find_all('a', attrs={'href': re.compile("//doi[.]org/")})
+
+    if len(possibleLinks) > 0:
+        logger.debug("** fetching reprint using the 'doiLink' finder...")
+        pdfUrl = possibleLinks[0].get('href')
+        return pdfUrl
     return None

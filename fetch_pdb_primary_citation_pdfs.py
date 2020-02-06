@@ -40,7 +40,7 @@ def download_pmids_from_pdbj(min_date=None, max_date=None, filename="pmids", use
                 WHERE b."pdbx_database_id_PubMed" IS NOT NULL AND b."pdbx_database_id_PubMed" <> -1
             ) as t 
             GROUP BY pmid, t.year
-            ORDER BY min(deposition_date) DESC
+            ORDER BY min(deposition_date) DESC, pmid DESC
         """
 
     if min_date is not None or max_date is not None:
@@ -113,12 +113,15 @@ def pdf(pmids_csv_file, output_directory=PDFS_DIR, errors_file=ERRORS_FILE, max_
     finders = [
         'genericCitationLabelled',
         'pubmed_central_v2',
+        'science_direct',
+        'cellPress',
+        'direct_pdf_link',
         'acsPublications',
+        'doiLink',
         'uchicagoPress',
         'nejm',
         'futureMedicine',
-        'science_direct',
-        'direct_pdf_link',
+        'eLife'
     ]
 
     # Add headers
