@@ -50,6 +50,7 @@ def savePdfFromUrl(pdf_url, output_dir, name, headers):
                 pdf_url = pdf_url.replace("doi/epdf/", "doi/pdfdirect/")
                 pdf_url = pdf_url.replace("doi/pdf/", "doi/pdfdirect/")
 
+                time.sleep(2)
                 t = requests.get(pdf_url, headers=headers, allow_redirects=True)
                 if not is_pdf_content(t.content):
                     return False
@@ -65,17 +66,16 @@ def savePdfFromUrl(pdf_url, output_dir, name, headers):
                 else:
                     pdf_url = potential_url
 
+                pdf_url = pdf_url.replace("doi/epdf/", "doi/pdfdirect/")
+                pdf_url = pdf_url.replace("doi/pdf/", "doi/pdfdirect/")
+                time.sleep(2)
                 t = requests.get(pdf_url, headers=headers, allow_redirects=True)
                 if not is_pdf_content(t.content):
-                    pdf_url = pdf_url.replace("doi/epdf/", "doi/pdfdirect/")
-                    pdf_url = pdf_url.replace("doi/pdf/", "doi/pdfdirect/")
-
-                    t = requests.get(pdf_url, headers=headers, allow_redirects=True)
-                    if not is_pdf_content(t.content):
-                        return False
+                    return False
             elif custom:
                 pdf_url = custom[0].split('"')[1]
 
+                time.sleep(2)
                 t = requests.get(pdf_url, headers=headers, allow_redirects=True)
                 if not is_pdf_content(t.content):
                     return False
