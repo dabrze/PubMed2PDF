@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import urllib
+import time
 
 import requests
 from bs4 import BeautifulSoup
@@ -84,6 +85,8 @@ def savePdfFromUrl(pdf_url, output_dir, name, headers):
     with open('{0}/{1}.pdf'.format(output_dir, name), 'wb') as f:
         for block in t.iter_content(2048):
             f.write(block)
+
+    time.sleep(5)
 
     return True
 
