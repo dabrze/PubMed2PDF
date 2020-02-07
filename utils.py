@@ -34,7 +34,10 @@ def savePdfFromUrl(pdf_url, output_dir, name, headers):
     if t.status_code == 404 or t.status_code == 403:
         return False
     elif not is_pdf_content(t.content):
-        decoded_content = t.content.decode('utf-8')
+        try:
+            decoded_content = t.content.decode('utf-8')
+        except:
+            decoded_content = t.content.decode("ISO-8859-1")
 
         if HTML_OR_XML.match(decoded_content):
             urls = JAVASCRIPT_REDIRECT.findall(decoded_content)
@@ -52,7 +55,9 @@ def savePdfFromUrl(pdf_url, output_dir, name, headers):
             elif pdfs:
                 potential_url = pdfs[0].split('"')[3]
 
-                if not "http" in potential_url:
+                if potential_url.startswith("//"):
+                    pdf_url = "https:" + potential_url
+                elif not "http" in potential_url:
                     fragments = pdf_url.split('/')
                     server_url = fragments[0] + "//" + fragments[2]
                     pdf_url = server_url + pdfs[0].split('"')[3]

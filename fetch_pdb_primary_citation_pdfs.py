@@ -33,13 +33,13 @@ def query_pdbj(sql, format, dest_file):
 def download_pmids_from_pdbj(min_date=None, max_date=None, filename="pmids", use_cache=False):
     pmids_file = os.path.join(RESULTS_DIR, filename + ".csv")
     query = """
-            SELECT pmid as "PubMed id", count(pdb_id) as "Number of deposits", min(deposition_date) as "Deposition date", t.year as "Publication year", array_agg(pdb_id) as "PDB ids"
+            SELECT pmid as "PubMed id", count(pdb_id) as "Number of deposits", min(deposition_date) as "Deposition date", min(t.year) as "Publication year", array_agg(pdb_id) as "PDB ids"
             FROM (
                 SELECT a.pdbid as pdb_id, a.deposition_date as deposition_date, b."pdbx_database_id_PubMed" as pmid, b.year 
                 FROM pdbj.brief_summary a left join pdbj.citation b on b.pdbid = a.pdbid
                 WHERE b."pdbx_database_id_PubMed" IS NOT NULL AND b."pdbx_database_id_PubMed" <> -1
             ) as t 
-            GROUP BY pmid, t.year
+            GROUP BY pmid
             ORDER BY min(deposition_date) DESC, pmid DESC
         """
 
