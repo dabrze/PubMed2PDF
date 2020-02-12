@@ -134,18 +134,14 @@ def fetch(pmid, finders, name, headers, failed_pubmeds, output_dir):
             failed_pubmeds.append(pmid)
 
 
-def acsPublications(req, soup, headers):
-    possibleLinks = [
-        x
-        for x in soup.find_all('a')
-        if type(x.get('title')) == str and (
-                'high-res pdf' in x.get('title').lower()
-                or 'low-res pdf' in x.get('title').lower())
-    ]
+def jbcPublications(req, soup, headers):
+    mainUrl = getMainUrl(req.url)
+
+    possibleLinks = soup.find_all('meta', attrs={'name': re.compile("citation_pdf_url")})
 
     if len(possibleLinks) > 0:
-        logger.debug("** fetching reprint using the 'acsPublications' finder...")
-        pdfUrl = getMainUrl(req.url) + possibleLinks[0].get('href')
+        logger.debug("** fetching reprint using the 'jbcPublications' finder...")
+        pdfUrl = possibleLinks[0].get('content')
         return pdfUrl
 
     return None

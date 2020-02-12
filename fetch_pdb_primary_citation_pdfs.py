@@ -116,12 +116,12 @@ def pdf(pmids_csv_file, output_directory=PDFS_DIR, errors_file=ERRORS_FILE, max_
         'science_direct',
         'cellPress',
         'direct_pdf_link',
-        'acsPublications',
         'doiLink',
         'uchicagoPress',
         'nejm',
         'futureMedicine',
-        'eLife'
+        'eLife',
+        'jbcPublications'
     ]
 
     # Add headers
